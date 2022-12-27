@@ -8,6 +8,7 @@ import torch
 import torch.nn.functional as F
 import torchvision
 import numpy as np
+import braceexpand
 try:
     import timm
     from timm.data import resolve_data_config
@@ -50,9 +51,11 @@ def main():
     parser.add_argument('--save_images', default=False, action="store_true", help="verbose mode")
     parser.add_argument('--save_features', default=False, action="store_true", help="verbose mode")
     parser.add_argument('--save_ids', default=False, action="store_true", help="verbose mode")
+    parser.add_argument('--save_ids_multilabel', default=False, action="store_true", help="verbose mode")
     parser.add_argument('--save_meta', default=False, action="store_true", help="verbose mode")
     parser.add_argument('--save_probas', default=False, action="store_true", help="verbose mode")
     parser.add_argument('--filter_thres', default=0, type=float, help="verbose mode")
+    parser.add_argument('--filter_topk', default=0, type=int, help="verbose mode")
     args = parser.parse_args()
     run(args)
    
@@ -82,7 +85,21 @@ def world_info_from_env():
 
     return local_rank, global_rank, world_size
 
-from webdataset.shardlists import IterableDataset, Composable, ShardSample, SimpleShardSample
+from webdataset.shardlists import IterableDataset
+class ShardSample:
+    pass
+class SimpleShardSample(ShardSample):
+    def __init__(self, urls):
+        if isinstance(urls, str):
+            urls = list(braceexpand.braceexpand(urls))
+        else:
+            urls = list(urls)
+        self.urls = list(urls)
+        assert isinstance(self.urls[0], str)
+
+    def sample(self):
+        return self.urls.copy()
+
 class DistPytorchEnv:
     """A class encapsulating the PyTorch node/worker environment."""
 
@@ -103,8 +120,7 @@ class DistPytorchEnv:
         available only in the environment where the loader is created.
         This class retains that environment info when it is serialized.
         """
-        from webdataset import gopen
-
+        from webdataset.gopen import info
         try:
             import torch
             import torch.distributed
@@ -126,11 +142,11 @@ class DistPytorchEnv:
             if worker_info is not None:
                 self.worker = worker_info.id, worker_info.num_workers
 
-        gopen.info["nodeinfo"] = self.nodeinfo
-        gopen.info["rank"], gopen.info["size"] = self.rank or (-1, -1)
-        gopen.info["worker_id"], gopen.info["num_workers"] = self.worker or (-1, -1)
+        info["nodeinfo"] = self.nodeinfo
+        info["rank"], info["size"] = self.rank or (-1, -1)
+        info["worker_id"], info["num_workers"] = self.worker or (-1, -1)
 
-class DistShardList(IterableDataset, DistPytorchEnv, Composable):
+class DistShardList(IterableDataset, DistPytorchEnv):
     """An iterable dataset yielding a list of urls.
     This understands the PyTorch distributed and worker APIs and splits shards
     accordingly.
@@ -268,7 +284,7 @@ def run(args):
             wds.WebDataset(shardlist)
             .decode("pil", handler=wds.ignore_and_continue)
             .rename(image="jpg;png", json="json")
-            .then(dup)
+            .compose(dup)
             .map_dict(image=transform)
             .to_tuple("raw", "image", "json")
             .batched(args.batch_size)
@@ -284,7 +300,6 @@ def run(args):
         dataloader = torch.utils.data.DataLoader(dataset, num_workers=args.workers, shuffle=False, batch_size=args.batch_size)
     else:
         raise ValueError(args.dataset_type)
-
     chunk = []
     chunk_id = 0
     nb = 0
@@ -305,23 +320,30 @@ def run(args):
         if args.filter_thres:
             mask = (maxes >= args.filter_thres)
         else:
-            ids = features.argmax(dim=1)
-            mask = None
+            F = features
+            Ftop, Ftop_vals = F.topk(k=args.filter_topk, dim=1)
+            mask = (F >= Ftop[:, -1].view(len(F), 1))
+            F = F.cpu()
+            mask = mask.cpu()
+            ints = torch.arange(F.shape[1])
         features = features.cpu()
-        features = features.numpy()
         for i in range(len(X_raw)):
-            if mask is not None and mask[i] == False:
-                continue
+            if args.filter_thres:
+                if mask is not None and mask[i] == False:
+                    continue
             key = f"{rank}_{i+nb}"
             dic = {"__key__": key}
             if args.save_images:
                 dic["image.jpg"] = X_raw[i]
             if args.save_features:
-                dic["features.npy"] = features[i]
+                dic["features.pth"] = features[i]
             if args.save_meta:
                 dic["meta.json"] = meta[i]
             if args.save_ids:
                 dic["class.cls"] = ids[i].item()
+            if args.save_ids_multilabel:
+                dic["class.pth"] = ints[mask[i]]
+                dic["proba.pth"] = F[i][mask[i]]
             if args.save_probas:
                 dic["proba.pyd"] = maxes[i].item()
             sink.write(dic)
