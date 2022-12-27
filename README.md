@@ -22,8 +22,8 @@ python setup.py install
 
 ## Timm example
 
-`compute_embeddings --dataset__type  image_folder --dataset_root root --batches_per_chunk 10  --library=timm --model "resnet50"  --batch_size 64 --distributed --out_folder out`
+`compute_embeddings --dataset_type image_folder --dataset_root root --batches_per_chunk 10  --library=timm --model "resnet50" --batch_size 64 --distributed --out_folder out`
 
 ## HuggingFace example
 
-`compute_embeddings --dataset__type  image_folder --dataset_root root --batches_per_chunk 10  --library=huggingface --model_class RegNetModel --model "facebook/regnet-y-040"  --batch_size 64 --distributed --out_folder out`
+`compute_embeddings --dataset_type image_folder --dataset_root root --batches_per_chunk 10  --library=huggingface --model_class RegNetModel --model "facebook/regnet-y-040"  --batch_size 64 --distributed --out_folder out`
