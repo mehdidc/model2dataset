@@ -22,6 +22,8 @@ from factory import build_pipeline, PipelineImageTransform
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default="config.yaml")
+    parser.add_argument('--worker', type=int, default=0)
+    parser.add_argument('--nb_workers', type=int, default=1)
     parser.add_argument('--verbose', default=False, action="store_true", help="verbose mode")
     args = parser.parse_args()
     run(args)
@@ -41,7 +43,7 @@ def run(args):
     if dataset.type == "webdataset":
         assert has_wds
         shardlist = wds.SimpleShardList(dataset.root)
-        print(dataset.inputs)
+        shardlist.urls = [url for i, url in enumerate(shardlist.urls) if i % args.nb_workers == args.worker]
         ds = (
             wds.WebDataset(shardlist)
             .decode("pil", handler=wds.ignore_and_continue)
@@ -60,9 +62,8 @@ def run(args):
         raise ValueError(dataset.type)
     
     nb_total = 0
-    prefix = 0
     t0 = time.time()
-    pattern = f"{output.folder}/{prefix}_%05d.tar"
+    pattern = f"{output.folder}/{args.worker}_%05d.tar"
     sink = wds.ShardWriter(pattern, maxcount=output.per_shard)
     for data in dataloader:
         nb = len(data[0])
@@ -74,7 +75,7 @@ def run(args):
         for k, v in data_dict.items():
             print(k, len(v))
         for i in range(nb):
-            key = f"{prefix}_{i+nb_total}"
+            key = f"{args.worker}_{i+nb_total}"
             dic = {"__key__": key}
             for out in output.outputs:
                 name, ext = out.split(".")
