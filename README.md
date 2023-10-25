@@ -22,6 +22,7 @@ python setup.py develop
 
 example with LLAVA:
 
+Write follow into `config.yaml`
 ```yaml
 dataset:
   root: /path/0000000.tar
@@ -50,3 +51,7 @@ pipeline:
     temperature: 0.2
     max_new_tokens: 1024
 ```
+
+then
+
+`model2dataset --config config.yaml`
