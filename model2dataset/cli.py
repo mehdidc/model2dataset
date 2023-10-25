@@ -44,6 +44,8 @@ def run(args):
         assert has_wds
         shardlist = wds.SimpleShardList(dataset.root)
         shardlist.urls = [url for i, url in enumerate(shardlist.urls) if i % args.nb_workers == args.worker]
+        if args.verbose:
+            print(f"Worker: {args.worker}, Total Workers: {args.nb_workers}, Number of shards to process: {len(shardlist.urls)}")
         ds = (
             wds.WebDataset(shardlist)
             .decode("pil", handler=wds.ignore_and_continue)
@@ -63,7 +65,7 @@ def run(args):
     
     nb_total = 0
     t0 = time.time()
-    pattern = f"{output.folder}/{args.worker}_%05d.tar"
+    pattern = f"{output.folder}/{args.worker}_%015d.tar"
     sink = wds.ShardWriter(pattern, maxcount=output.per_shard)
     for data in dataloader:
         nb = len(data[0])
@@ -84,7 +86,7 @@ def run(args):
             sink.write(dic)
         nb_total += nb
         throughput = nb_total / (time.time() - t0)
-        print(f"Total nb of samples processed: {nb_total}. Throughput: {throughput:.2f} images per sec")
+        print(f"Total nb of samples processed: {nb_total}. Throughput: {throughput:.2f} samples per sec")
 
 if __name__ == "__main__":
     sys.exit(main())
