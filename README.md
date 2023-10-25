@@ -1,29 +1,19 @@
-# Compute Embeddings 
+# Model2Dataset 
 
 
-The goal of this repo is to compute embeddings  on dataset using pretrained models and save
-them into disk.
+The goal of this repo is to compute embeddings or generated samples on a dataset using pretrained models and save
+them into disk into a synthetic.
 
 # Features
 
-- Support for Timm and HuggingFace libraries for pretrained models
-- Support Webdataset and torchvision's ImageFolder for data loading
-- Support for computing embeddings in distributed manner 
+- Support for Timm to compute features or classes
+- Support for HuggingFace models to compute features or classes
+- Support for LLAVA (captioning)
 
 # How to install?
 
 ```bash
-git clone https://github.com/mehdidc/compute_embeddings
-cd compute_embeddings
-python setup.py install
-```
-
-# How to use?
-
-## Timm example
-
-`compute_embeddings --dataset_type image_folder --dataset_root root --batches_per_chunk 10  --library=timm --model "resnet50" --batch_size 64 --distributed --out_folder out`
-
-## HuggingFace example
-
-`compute_embeddings --dataset_type image_folder --dataset_root root --batches_per_chunk 10  --library=huggingface --model_class RegNetModel --model "facebook/regnet-y-040"  --batch_size 64 --distributed --out_folder out`
+git clone https://github.com/mehdidc/model2dataset
+cd model2dataset
+python setup.py develop
+``
