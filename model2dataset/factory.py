@@ -72,6 +72,19 @@ class HFFeatureExtractor:
             dump[out] = out_values
         return dump
 
+class String:
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+    
+    def predict(self, inputs):
+        captions = {k:v for k, v in inputs.items() if type(v[0]) == str}
+        values = []
+        nb = len(captions[list(captions.keys())[0]])
+        for i in range(nb):
+            value = self.cfg.format.format(**{k: v[i] for k, v in captions.items()})
+            values.append(value)
+        return {"string": values}
   
 class Pipeline:
 
@@ -114,6 +127,8 @@ def build_single(config):
         return HFFeatureExtractor(config)
     elif config.type == "llava":
         return LLAVACaptioner(config)
+    elif config.type == "string":
+        return String(config)
     else:
         raise ValueError(f"Unknown feature extractor type: {config.type}")
 

@@ -1,6 +1,6 @@
 import argparse
 import torch
-
+import time
 from llava.constants import IMAGE_TOKEN_INDEX, DEFAULT_IMAGE_TOKEN, DEFAULT_IM_START_TOKEN, DEFAULT_IM_END_TOKEN
 from llava.conversation import conv_templates, SeparatorStyle
 from llava.model.builder import load_pretrained_model
@@ -21,10 +21,9 @@ class LLAVACaptioner:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.cfg = cfg
         model_name = get_model_name_from_path(cfg.model_path)
-        tokenizer, model, image_processor, context_len = load_pretrained_model(cfg.model_path, cfg.model_base, model_name)
+        tokenizer, model, image_processor, context_len = load_pretrained_model(cfg.model_path, cfg.model_base, model_name, load_4bit=cfg.load_4bit, load_8bit=cfg.load_8bit)
 
-        qs = cfg.query
-        assert qs
+        qs = cfg.query or ""
         if model.config.mm_use_im_start_end:
             qs = DEFAULT_IM_START_TOKEN + DEFAULT_IMAGE_TOKEN + DEFAULT_IM_END_TOKEN + '\n' + qs
         else:
@@ -54,20 +53,29 @@ class LLAVACaptioner:
         self.prompt = prompt
         self.tokenizer = tokenizer
         self.conv = conv
-        self.model = model.to(self.device)
+        if not cfg.load_8bit and not cfg.load_4bit:
+            self.model = model.to(self.device)
+        else:
+            self.model = model
     
     def predict(self, inputs):
         image_tensor = inputs[self.cfg.image].to(self.device)
-        prompt = self.prompt
+        nb = len(image_tensor)
+        prompt = [self.prompt] * nb if self.cfg.prompt is None else inputs[self.cfg.prompt]
         tokenizer = self.tokenizer
         conv = self.conv
-        nb = len(image_tensor)
-        input_ids = tokenizer_image_token(prompt, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt').unsqueeze(0).repeat(nb, 1).to(self.device)
+
+        input_ids = [tokenizer_image_token(p, tokenizer, IMAGE_TOKEN_INDEX, return_tensors='pt') for p in prompt]
+        max_len = max([len(i) for i in input_ids])
+        input_ids = [torch.cat([torch.ones(max_len - len(ids), dtype=torch.long)* tokenizer.pad_token_id, ids]) for ids in input_ids]
+        input_ids = torch.stack(input_ids)
+        input_ids = input_ids.to(self.device)
 
         stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
         keywords = [stop_str]
         stopping_criteria = KeywordsStoppingCriteria(keywords, tokenizer, input_ids)
-        print(input_ids.shape, image_tensor.shape)
+        #print(input_ids.shape, image_tensor.shape)
+        t0 = time.time()
         with torch.inference_mode():
             output_ids = self.model.generate(
                 input_ids,
@@ -78,7 +86,7 @@ class LLAVACaptioner:
                 use_cache=True,
                 #stopping_criteria=[stopping_criteria]
             )
-
+        print(time.time() - t0)
         input_token_len = input_ids.shape[1]
         n_diff_input_output = (input_ids != output_ids[:, :input_token_len]).sum().item()
         if n_diff_input_output > 0:

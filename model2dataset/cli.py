@@ -82,7 +82,7 @@ def run(args):
             for out in output.outputs:
                 name, ext = out.split(".")
                 dic[out] = data_dict[name][i]
-            print(dic)
+            #print(dic)
             sink.write(dic)
         nb_total += nb
         throughput = nb_total / (time.time() - t0)
