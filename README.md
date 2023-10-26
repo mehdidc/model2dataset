@@ -51,7 +51,7 @@ Can you describe the image in few words ? ASSISTANT:"
     query: null
     conv_mode: null
     temperature: 0.2
-    max_new_tokens: 1
+    max_new_tokens: 30
     load_4bit: False
     load_8bit: False
     output: llava_caption
