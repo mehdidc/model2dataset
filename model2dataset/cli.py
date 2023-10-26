@@ -74,15 +74,11 @@ def run(args):
             data_dict[k] = d
         out = pipe.predict(data_dict)
         data_dict.update(out)
-        for k, v in data_dict.items():
-            print(k, len(v))
         for i in range(nb):
             key = f"{args.worker}_{i+nb_total}"
             dic = {"__key__": key}
-            for out in output.outputs:
-                name, ext = out.split(".")
-                dic[out] = data_dict[name][i]
-            #print(dic)
+            for name, ext in output.outputs.items():
+                dic[name + "." + ext] = data_dict[name][i]
             sink.write(dic)
         nb_total += nb
         throughput = nb_total / (time.time() - t0)

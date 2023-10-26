@@ -96,4 +96,4 @@ class LLAVACaptioner:
         #outputs = [(o[:-len(stop_str)] if o.endswith(stop_str) else o) for o in outputs]
         outputs = [(o[0:o.index(stop_str)] if (stop_str in o) else o) for o in outputs]
         outputs = [o.strip() for o in outputs]
-        return {"caption": outputs}
+        return {self.cfg.output: outputs}

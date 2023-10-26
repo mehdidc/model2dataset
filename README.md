@@ -25,31 +25,43 @@ example with LLAVA:
 Write follow into `config.yaml`
 ```yaml
 dataset:
-  root: /path/0000000.tar
+  root: /path/{0000000..0139827}.tar
   type: webdataset
   entries:
     image: png;jpg;jpeg;webp
+    caption: txt
   inputs:
     - image
-    - llava_image
-  batch_size: 4
-  workers: 4
-output:
-  per_shard: 4
-  folder: out
-  outputs:
-    - image.jpg
-    - llava_caption.txt
+    - llava_transformed_image
+    - caption
+  batch_size: 16
+  workers: 8
+
 pipeline:
-  llava:
+
+  image_to_caption:
     type: llava
-    image: llava_image
-    model_path: /path/llava-v1.5-13b
+    image_transform:
+      image: llava_transformed_image
+    image: llava_transformed_image
+    model_path: /path/llava-v1.5-7b
     model_base: null
-    query: "Can you describe this image?"
+    prompt: "A chat between a curious human and an artificial intelligence assistant. The assistant gives helpful, detailed, and polite answers to the human's questions. USER: <image>
+Can you describe the image in few words ? ASSISTANT:"
+    query: null
     conv_mode: null
     temperature: 0.2
-    max_new_tokens: 1024
+    max_new_tokens: 1
+    load_4bit: False
+    load_8bit: False
+    output: llava_caption
+  
+output:
+  per_shard: 10000
+  folder: out
+  outputs:
+    image: jpg
+    llava_caption: txt
 ```
 
 then
