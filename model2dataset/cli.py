@@ -17,7 +17,7 @@ try:
 except ImportError:
     has_wds = False
 
-from factory import build_pipeline, PipelineImageTransform
+from factory import build_pipeline, PipelineImageTransform, build_filters
 
 def main():
     parser = argparse.ArgumentParser()
@@ -40,6 +40,8 @@ def run(args):
     pipe = build_pipeline(cfg.pipeline)
     output = cfg.output
     pipe_image_transform = PipelineImageTransform(pipe)
+    filters = build_filters(cfg.filters) if cfg.filters else None
+    
     if dataset.type == "webdataset":
         assert has_wds
         shardlist = wds.SimpleShardList(dataset.root)
@@ -68,17 +70,35 @@ def run(args):
     pattern = f"{output.folder}/{args.worker}_%015d.tar"
     sink = wds.ShardWriter(pattern, maxcount=output.per_shard)
     for data in dataloader:
+
+
+        # Predicting
         nb = len(data[0])
         data_dict = {}
         for k, d in zip(dataset.inputs, data):
             data_dict[k] = d
         out = pipe.predict(data_dict)
         data_dict.update(out)
+        # Filtering
+        if filters is not None:
+            filtered = []
+            for i in range(nb):
+                d = {}
+                for name in data_dict.keys():
+                    d[name] = data_dict[name][i]
+                filtered.append(filters.filter(d)==False)
+        else:
+            filtered = None
+        # Saving
         for i in range(nb):
+            if filtered and filtered[i]:
+                continue
             key = f"{args.worker}_{i+nb_total}"
             dic = {"__key__": key}
+            d = {}
             for name, ext in output.outputs.items():
                 dic[name + "." + ext] = data_dict[name][i]
+                d[name] = data_dict[name][i]
             sink.write(dic)
         nb_total += nb
         throughput = nb_total / (time.time() - t0)

@@ -119,7 +119,20 @@ class PipelineImageTransform():
             data_new.update(data_out)
             yield data_new
 
-def build_single(config):
+
+
+
+def build_pipeline(config):
+    steps = []
+    keys = list(config.keys())
+    for k in keys:
+        v = getattr(config, k)
+        fe = build_model(v)
+        fe.name = k
+        steps.append(fe)
+    return Pipeline(steps)
+
+def build_model(config):
     if config.type == "timm":
         return TimmFeatureExtractor(config)
     elif config.type == "huggingface":
@@ -130,14 +143,33 @@ def build_single(config):
         return String(config)
     else:
         raise ValueError(f"Unknown feature extractor type: {config.type}")
+    
 
+class Filters:
 
-def build_pipeline(config):
-    steps = []
-    keys = list(config.keys())
-    for k in keys:
-        v = getattr(config, k)
-        fe = build_single(v)
-        fe.name = k
-        steps.append(fe)
-    return Pipeline(steps)
+    def __init__(self, filters):
+        self.filters = filters
+    
+    def filter(self, input):
+        return all([f.filter(input) for f in self.filters])
+
+class ExprFilter:
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+    
+    def filter(self, inputs):
+        locals().update(inputs)
+        return eval(self.cfg.expr)
+
+def build_filters(cfg):
+    filters = []
+    for k, v in cfg.items():
+        filters.append(build_filter(v))
+    return Filters(filters)
+
+def build_filter(cfg):
+    if cfg.type == "expr":
+        return ExprFilter(cfg)
+    else:
+        raise ValueError(f"Unknown filter type: {v.type}")
