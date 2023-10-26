@@ -1,5 +1,6 @@
 import time
 from functools import partial
+import numpy as np
 import os
 import logging
 import argparse
@@ -68,6 +69,7 @@ def run(args):
     nb_total = 0
     t0 = time.time()
     pattern = f"{output.folder}/{args.worker}_%015d.tar"
+    nb_written = 0
     sink = wds.ShardWriter(pattern, maxcount=output.per_shard)
     for data in dataloader:
 
@@ -89,6 +91,7 @@ def run(args):
                 filtered.append(filters.filter(d)==False)
         else:
             filtered = None
+        print(np.mean(filtered))
         # Saving
         for i in range(nb):
             if filtered and filtered[i]:
@@ -100,9 +103,12 @@ def run(args):
                 dic[name + "." + ext] = data_dict[name][i]
                 d[name] = data_dict[name][i]
             sink.write(dic)
+            nb_written += 1
         nb_total += nb
-        throughput = nb_total / (time.time() - t0)
-        print(f"Total nb of samples processed: {nb_total}. Throughput: {throughput:.2f} samples per sec")
+        dt = (time.time() - t0)
+        processed_thr = nb_total / dt
+        written_thr = nb_written / dt
+        print(f"Total nb of samples processed: {nb_total}. Total written: {nb_written}. Processed/s: {processed_thr:.2f}. Written/s: {written_thr:.2f}.")
 
 if __name__ == "__main__":
     sys.exit(main())
